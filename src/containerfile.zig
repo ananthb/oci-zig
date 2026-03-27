@@ -151,7 +151,7 @@ pub const Containerfile = struct {
         const file = try std.fs.openFileAbsolute(path, .{});
         defer file.close();
         const stat = try file.stat();
-        const content = try allocator.alloc(u8, stat.size);
+        const content = try allocator.alloc(u8, @intCast(stat.size));
         defer allocator.free(content);
         const bytes_read = try file.readAll(content);
         return parse(allocator, content[0..bytes_read]);
