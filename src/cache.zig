@@ -13,9 +13,6 @@ pub const CacheError = error{
     IoError,
 };
 
-/// Default cache directory
-pub const default_cache_dir = "/var/cache/xenomorph";
-
 /// Cache entry metadata
 pub const CacheEntry = struct {
     digest: []const u8,
@@ -37,17 +34,8 @@ pub const LayerCache = struct {
 
     const Self = @This();
 
-    /// Initialize cache with default settings
-    pub fn init(allocator: std.mem.Allocator) Self {
-        return Self{
-            .allocator = allocator,
-            .cache_dir = default_cache_dir,
-            .max_size_bytes = 10 * 1024 * 1024 * 1024, // 10GB default
-        };
-    }
-
-    /// Initialize cache with custom directory
-    pub fn initWithDir(allocator: std.mem.Allocator, cache_dir: []const u8) Self {
+    /// Initialize cache with the given directory
+    pub fn init(allocator: std.mem.Allocator, cache_dir: []const u8) Self {
         return Self{
             .allocator = allocator,
             .cache_dir = cache_dir,
@@ -235,8 +223,8 @@ pub const LayerCache = struct {
 };
 
 /// Check if an image is cached
-pub fn isImageCached(allocator: std.mem.Allocator, ref: *const image.ImageReference) bool {
-    const cache = LayerCache.init(allocator);
+pub fn isImageCached(allocator: std.mem.Allocator, cache_dir: []const u8, ref: *const image.ImageReference) bool {
+    const cache = LayerCache.init(allocator, cache_dir);
 
     // Check if manifest is cached
     const manifest_path = std.fmt.allocPrint(
@@ -252,15 +240,15 @@ pub fn isImageCached(allocator: std.mem.Allocator, ref: *const image.ImageRefere
 
 test "LayerCache initialization" {
     const testing = std.testing;
-    const cache = LayerCache.init(testing.allocator);
+    const cache = LayerCache.init(testing.allocator, "/tmp/test-cache");
 
-    try testing.expectEqualStrings(default_cache_dir, cache.cache_dir);
+    try testing.expectEqualStrings("/tmp/test-cache", cache.cache_dir);
     try testing.expectEqual(@as(u64, 10 * 1024 * 1024 * 1024), cache.max_size_bytes);
 }
 
 test "layer path generation" {
     const testing = std.testing;
-    var cache = LayerCache.initWithDir(testing.allocator, "/tmp/cache");
+    var cache = LayerCache.init(testing.allocator, "/tmp/cache");
 
     const path = try cache.getLayerPath("sha256:abc123");
     defer testing.allocator.free(path);

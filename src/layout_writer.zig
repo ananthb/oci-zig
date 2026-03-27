@@ -45,7 +45,9 @@ pub fn writeOciLayout(
     }
 
     // 2. Create gzipped tar layer from rootfs
-    const tmp_layer = "/tmp/xenomorph-oci-layer.tar.gz";
+    const tmp_dir = std.posix.getenv("TMPDIR") orelse "/tmp";
+    const tmp_layer = try std.fmt.allocPrint(allocator, "{s}/oci-layer-{x}.tar.gz", .{ tmp_dir, @as(u64, @truncate(@as(u128, @bitCast(std.time.nanoTimestamp())))) });
+    defer allocator.free(tmp_layer);
     defer std.fs.deleteFileAbsolute(tmp_layer) catch {};
 
     const tar_cmd = try std.fmt.allocPrint(
@@ -85,7 +87,8 @@ pub fn writeOciLayout(
     try copyFile(tmp_layer, layer_blob_path);
 
     // Compute diffID (sha256 of uncompressed tar)
-    const tmp_uncompressed = "/tmp/xenomorph-oci-layer.tar";
+    const tmp_uncompressed = try std.fmt.allocPrint(allocator, "{s}/oci-layer-{x}.tar", .{ tmp_dir, @as(u64, @truncate(@as(u128, @bitCast(std.time.nanoTimestamp())))) });
+    defer allocator.free(tmp_uncompressed);
     defer std.fs.deleteFileAbsolute(tmp_uncompressed) catch {};
 
     const gunzip_cmd = try std.fmt.allocPrint(
