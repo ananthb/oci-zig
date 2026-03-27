@@ -4,7 +4,6 @@ const ocispec = @import("spec/lib.zig");
 const log = @import("log.zig");
 const oci_registry = @import("registry.zig");
 
-
 /// Container image configuration (entrypoint, cmd, env, working directory)
 pub const ImageConfig = struct {
     entrypoint: ?[]const []const u8 = null,

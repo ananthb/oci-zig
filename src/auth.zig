@@ -34,7 +34,7 @@ pub fn parseWwwAuthenticate(header: []const u8) ?AuthChallenge {
     var rest: []const u8 = undefined;
     if (header.len >= bearer_prefix.len and
         (std.mem.eql(u8, header[0..bearer_prefix.len], bearer_prefix) or
-        std.mem.eql(u8, header[0..bearer_prefix_lower.len], bearer_prefix_lower)))
+            std.mem.eql(u8, header[0..bearer_prefix_lower.len], bearer_prefix_lower)))
     {
         rest = header[bearer_prefix.len..];
     } else {
