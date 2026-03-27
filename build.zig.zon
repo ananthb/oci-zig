@@ -1,0 +1,11 @@
+.{
+    .name = .oci,
+    .version = "0.1.0",
+    .fingerprint = 0xc674b497beecfed4,
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
