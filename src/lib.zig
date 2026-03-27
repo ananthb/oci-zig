@@ -26,3 +26,6 @@ pub const layout_writer = @import("layout_writer.zig");
 
 /// Containerfile/Dockerfile parser
 pub const containerfile = @import("containerfile.zig");
+
+/// Container command execution (RUN support via chroot)
+pub const run = @import("run.zig");

@@ -2,6 +2,7 @@ const std = @import("std");
 
 pub const Instruction = union(enum) {
     from: FromInstruction,
+    run: RunInstruction,
     copy: CopyInstruction,
     add: CopyInstruction,
     env: EnvInstruction,
@@ -14,6 +15,11 @@ pub const Instruction = union(enum) {
     volume: []const u8,
     user: []const u8,
     stopsignal: []const u8,
+};
+
+pub const RunInstruction = struct {
+    /// Command to execute. Shell form: ["/bin/sh", "-c", "cmd"]. Exec form: ["cmd", "arg1"].
+    argv: []const []const u8,
 };
 
 pub const FromInstruction = struct {
@@ -93,6 +99,9 @@ pub const Containerfile = struct {
             if (std.mem.eql(u8, keyword, "FROM")) {
                 const inst = try parseFrom(allocator, expanded_rest);
                 try instructions.append(allocator, inst);
+            } else if (std.mem.eql(u8, keyword, "RUN")) {
+                const argv = try parseExecOrShell(allocator, expanded_rest);
+                try instructions.append(allocator, .{ .run = .{ .argv = argv } });
             } else if (std.mem.eql(u8, keyword, "COPY")) {
                 const inst = try parseCopy(allocator, expanded_rest, false);
                 try instructions.append(allocator, inst);
@@ -168,6 +177,10 @@ fn freeInstruction(allocator: std.mem.Allocator, inst: Instruction) void {
         .from => |f| {
             allocator.free(f.image);
             if (f.alias) |a| allocator.free(a);
+        },
+        .run => |r| {
+            for (r.argv) |a| allocator.free(a);
+            allocator.free(r.argv);
         },
         .copy, .add => |c| {
             for (c.sources) |s| allocator.free(s);
