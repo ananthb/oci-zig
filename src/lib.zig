@@ -4,7 +4,7 @@
 //! Containerfile parsing, and layout reading/writing.
 
 /// OCI spec types (image, runtime, distribution)
-pub const spec = @import("spec/lib.zig");
+pub const spec = @import("ocispec");
 
 /// OCI image reference parsing and types
 pub const image = @import("image.zig");

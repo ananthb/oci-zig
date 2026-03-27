@@ -66,6 +66,3 @@ nix flake check # run all CI checks (test, fmt, build, pre-commit)
 ## License
 
 Licensed under the terms of the [AGPL-3.0](./LICENSE).
-
-OCI specification [code](src/spec) borrowed from [oci-spec-zig](https://github.com/navidys/oci-spec-zig)
-distributed under the terms of the MIT license and terms of the AGPL.

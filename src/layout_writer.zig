@@ -1,6 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const ocispec = @import("spec/lib.zig");
+const ocispec = @import("ocispec");
 const log = @import("log.zig");
 const oci_registry = @import("registry.zig");
 
