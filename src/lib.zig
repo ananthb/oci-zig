@@ -30,8 +30,20 @@ pub const containerfile = @import("containerfile.zig");
 /// Container command execution (RUN support via chroot)
 pub const run = @import("run.zig");
 
+/// Container lifecycle management (create, start, kill, delete)
+pub const container = @import("container.zig");
+
+/// OCI Runtime Spec (config.json parsing)
+pub const runtime_spec = @import("runtime_spec.zig");
+
+/// OCI lifecycle hooks
+pub const hooks = @import("hooks.zig");
+
+/// Daemonless container runner (like podman run)
+pub const runz = @import("runz.zig");
+
 /// Logging (set log level, colors)
 pub const log = @import("log.zig");
 
-/// Linux-specific utilities (namespaces, mounts, seccomp, device setup)
+/// Linux-specific utilities (namespaces, mounts, seccomp, cgroups, capabilities)
 pub const linux_util = @import("linux.zig");

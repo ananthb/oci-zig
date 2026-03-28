@@ -1,0 +1,238 @@
+const std = @import("std");
+const log = @import("log.zig");
+
+const scoped_log = log.scoped("runtime-spec");
+
+/// OCI Runtime Spec config.json
+/// See: https://github.com/opencontainers/runtime-spec/blob/main/config.md
+pub const Spec = struct {
+    ociVersion: []const u8 = "1.0.2",
+    root: ?Root = null,
+    process: ?Process = null,
+    hostname: ?[]const u8 = null,
+    mounts: ?[]const Mount = null,
+    linux: ?Linux = null,
+
+    pub fn deinit(self: *Spec, allocator: std.mem.Allocator) void {
+        _ = self;
+        _ = allocator;
+    }
+};
+
+pub const Root = struct {
+    path: []const u8,
+    readonly: bool = false,
+};
+
+pub const Process = struct {
+    terminal: bool = false,
+    cwd: []const u8 = "/",
+    args: ?[]const []const u8 = null,
+    env: ?[]const []const u8 = null,
+    user: ?User = null,
+    capabilities: ?Capabilities = null,
+    noNewPrivileges: bool = true,
+    rlimits: ?[]const Rlimit = null,
+};
+
+pub const User = struct {
+    uid: u32 = 0,
+    gid: u32 = 0,
+    additionalGids: ?[]const u32 = null,
+};
+
+pub const Capabilities = struct {
+    bounding: ?[]const []const u8 = null,
+    effective: ?[]const []const u8 = null,
+    inheritable: ?[]const []const u8 = null,
+    permitted: ?[]const []const u8 = null,
+    ambient: ?[]const []const u8 = null,
+};
+
+pub const Rlimit = struct {
+    type: []const u8,
+    hard: u64,
+    soft: u64,
+};
+
+pub const Mount = struct {
+    destination: []const u8,
+    type: ?[]const u8 = null,
+    source: ?[]const u8 = null,
+    options: ?[]const []const u8 = null,
+};
+
+pub const Linux = struct {
+    namespaces: ?[]const Namespace = null,
+    resources: ?LinuxResources = null,
+    seccomp: ?Seccomp = null,
+    maskedPaths: ?[]const []const u8 = null,
+    readonlyPaths: ?[]const []const u8 = null,
+    cgroupsPath: ?[]const u8 = null,
+};
+
+pub const Namespace = struct {
+    type: []const u8,
+    path: ?[]const u8 = null,
+};
+
+pub const LinuxResources = struct {
+    memory: ?MemoryResources = null,
+    cpu: ?CpuResources = null,
+    pids: ?PidsResources = null,
+};
+
+pub const MemoryResources = struct {
+    limit: ?i64 = null,
+    swap: ?i64 = null,
+};
+
+pub const CpuResources = struct {
+    shares: ?u64 = null,
+    quota: ?i64 = null,
+    period: ?u64 = null,
+    cpus: ?[]const u8 = null,
+};
+
+pub const PidsResources = struct {
+    limit: i64 = -1,
+};
+
+pub const Seccomp = struct {
+    defaultAction: []const u8 = "SCMP_ACT_ERRNO",
+    architectures: ?[]const []const u8 = null,
+    syscalls: ?[]const SyscallRule = null,
+};
+
+pub const SyscallRule = struct {
+    names: []const []const u8,
+    action: []const u8,
+};
+
+/// Parse an OCI runtime spec config.json from a file
+pub fn parseConfigFile(allocator: std.mem.Allocator, path: []const u8) !Spec {
+    const file = try std.fs.openFileAbsolute(path, .{});
+    defer file.close();
+
+    const stat = try file.stat();
+    const data = try allocator.alloc(u8, @intCast(stat.size));
+    defer allocator.free(data);
+    _ = try file.readAll(data);
+
+    return parseConfig(allocator, data);
+}
+
+/// Parse an OCI runtime spec config.json from bytes
+pub fn parseConfig(allocator: std.mem.Allocator, data: []const u8) !Spec {
+    const parsed = try std.json.parseFromSlice(Spec, allocator, data, .{
+        .ignore_unknown_fields = true,
+    });
+    _ = parsed; // Ownership transferred; caller must manage
+    // For now, return a manually-built Spec from the JSON
+    return parseConfigManual(allocator, data);
+}
+
+/// Manual JSON parsing for more control over memory management
+fn parseConfigManual(allocator: std.mem.Allocator, data: []const u8) !Spec {
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, data, .{});
+    defer parsed.deinit();
+
+    const root = parsed.value;
+    var spec = Spec{};
+
+    if (root.object.get("ociVersion")) |v| {
+        if (v == .string) spec.ociVersion = try allocator.dupe(u8, v.string);
+    }
+
+    if (root.object.get("hostname")) |v| {
+        if (v == .string) spec.hostname = try allocator.dupe(u8, v.string);
+    }
+
+    if (root.object.get("root")) |r| {
+        if (r.object.get("path")) |p| {
+            if (p == .string) {
+                spec.root = .{
+                    .path = try allocator.dupe(u8, p.string),
+                    .readonly = if (r.object.get("readonly")) |ro| ro == .true else false,
+                };
+            }
+        }
+    }
+
+    if (root.object.get("process")) |p| {
+        spec.process = .{
+            .terminal = if (p.object.get("terminal")) |t| t == .true else false,
+            .cwd = if (p.object.get("cwd")) |c| blk: {
+                if (c == .string) break :blk try allocator.dupe(u8, c.string);
+                break :blk "/";
+            } else "/",
+            .args = if (p.object.get("args")) |a| try parseStringArray(allocator, a) else null,
+            .env = if (p.object.get("env")) |e| try parseStringArray(allocator, e) else null,
+            .noNewPrivileges = if (p.object.get("noNewPrivileges")) |n| n == .true else true,
+        };
+    }
+
+    return spec;
+}
+
+fn parseStringArray(allocator: std.mem.Allocator, value: std.json.Value) ![]const []const u8 {
+    if (value != .array) return &.{};
+    var list: std.ArrayListUnmanaged([]const u8) = .{};
+    for (value.array.items) |item| {
+        if (item == .string) {
+            try list.append(allocator, try allocator.dupe(u8, item.string));
+        }
+    }
+    return try list.toOwnedSlice(allocator);
+}
+
+/// Convert OCI runtime spec resources to cgroup Resources
+pub fn toCgroupResources(linux_res: *const LinuxResources) @import("linux/cgroup.zig").Resources {
+    var res = @import("linux/cgroup.zig").Resources{};
+
+    if (linux_res.memory) |mem| {
+        if (mem.limit) |limit| {
+            if (limit > 0) res.memory_max = @intCast(limit);
+        }
+        if (mem.swap) |swap| {
+            if (swap > 0) res.memory_swap_max = @intCast(swap);
+        }
+    }
+
+    if (linux_res.cpu) |cpu| {
+        if (cpu.quota) |quota| {
+            if (quota > 0) res.cpu_quota = @intCast(quota);
+        }
+        if (cpu.period) |period| {
+            res.cpu_period = period;
+        }
+        if (cpu.shares) |shares| {
+            // OCI uses shares (2-262144), cgroup v2 uses weight (1-10000)
+            // Approximate conversion: weight = 1 + (shares - 2) * 9999 / 262142
+            if (shares > 2) {
+                res.cpu_weight = @intCast(@min(10000, 1 + (shares - 2) * 9999 / 262142));
+            }
+        }
+        res.cpuset = cpu.cpus;
+    }
+
+    if (linux_res.pids) |pids| {
+        if (pids.limit > 0) res.pids_max = @intCast(pids.limit);
+    }
+
+    return res;
+}
+
+test "default spec" {
+    const spec = Spec{};
+    try std.testing.expectEqualStrings("1.0.2", spec.ociVersion);
+    try std.testing.expect(spec.root == null);
+    try std.testing.expect(spec.process == null);
+}
+
+test "default process" {
+    const proc = Process{};
+    try std.testing.expect(!proc.terminal);
+    try std.testing.expectEqualStrings("/", proc.cwd);
+    try std.testing.expect(proc.noNewPrivileges);
+}

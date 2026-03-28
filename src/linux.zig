@@ -5,3 +5,7 @@ pub const namespace = @import("linux/namespace.zig");
 pub const dev = @import("linux/dev.zig");
 pub const netlink = @import("linux/netlink.zig");
 pub const veth = @import("linux/veth.zig");
+pub const cgroup = @import("linux/cgroup.zig");
+pub const capabilities = @import("linux/capabilities.zig");
+pub const pty = @import("linux/pty.zig");
+pub const paths = @import("linux/paths.zig");

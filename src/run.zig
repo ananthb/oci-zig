@@ -44,6 +44,10 @@ pub const ContainerOptions = struct {
     env: ?[]const []const u8 = null,
     /// Network mode
     network: NetworkMode = .veth,
+    /// Run rootless (user namespace with uid/gid mapping)
+    rootless: bool = false,
+    /// Resource limits (null = no cgroup)
+    resources: ?*const @import("linux/cgroup.zig").Resources = null,
 };
 
 /// Execute a short-lived command inside a rootfs with container isolation.
@@ -104,12 +108,15 @@ pub fn runContainer(
         };
     }
 
-    // Create sync pipes for veth mode:
-    // pipe_to_parent: child signals "I've unshared" (child writes, parent reads)
-    // pipe_to_child: parent signals "network ready" (parent writes, child reads)
     const use_veth = options.network == .veth;
-    const pipe_to_parent = if (use_veth) std.posix.pipe() catch return error.SetupFailed else .{ @as(std.posix.fd_t, -1), @as(std.posix.fd_t, -1) };
-    const pipe_to_child = if (use_veth) std.posix.pipe() catch return error.SetupFailed else .{ @as(std.posix.fd_t, -1), @as(std.posix.fd_t, -1) };
+    // Sync pipes needed for veth (network setup) or rootless (uid/gid map writing)
+    const need_sync = use_veth or options.rootless;
+    const pipe_to_parent = if (need_sync) std.posix.pipe() catch return error.SetupFailed else .{ @as(std.posix.fd_t, -1), @as(std.posix.fd_t, -1) };
+    const pipe_to_child = if (need_sync) std.posix.pipe() catch return error.SetupFailed else .{ @as(std.posix.fd_t, -1), @as(std.posix.fd_t, -1) };
+
+    // Save caller's UID/GID before forking (needed for rootless uid/gid maps)
+    const outer_uid = linux.getuid();
+    const outer_gid = linux.getgid();
 
     const fork_result = doFork();
     if (fork_result == null) {
@@ -124,6 +131,14 @@ pub fn runContainer(
         if (pipe_to_parent[0] != -1) std.posix.close(pipe_to_parent[0]); // close read end
         if (pipe_to_child[1] != -1) std.posix.close(pipe_to_child[1]); // close write end
 
+        // Rootless: unshare user namespace first (before other namespaces)
+        if (options.rootless) {
+            syscall.unshareRaw(syscall.CloneFlags.CLONE_NEWUSER) catch |err| {
+                scoped_log.err("Failed to unshare user namespace: {}", .{err});
+                std.process.exit(126);
+            };
+        }
+
         // Unshare mount + PID + optionally network
         var ns_flags: u32 = syscall.CloneFlags.CLONE_NEWNS | syscall.CloneFlags.CLONE_NEWPID;
         if (options.network != .host) {
@@ -134,12 +149,12 @@ pub fn runContainer(
             std.process.exit(126);
         };
 
-        if (use_veth) {
-            // Signal parent: "I've unshared CLONE_NEWNET"
+        if (need_sync) {
+            // Signal parent: "I've unshared"
             _ = std.posix.write(pipe_to_parent[1], "r") catch {};
             std.posix.close(pipe_to_parent[1]);
 
-            // Wait for parent to finish host-side network setup
+            // Wait for parent to finish setup (uid/gid maps + network)
             var wait_buf: [1]u8 = undefined;
             _ = std.posix.read(pipe_to_child[0], &wait_buf) catch {};
             std.posix.close(pipe_to_child[0]);
@@ -183,12 +198,26 @@ pub fn runContainer(
     if (pipe_to_parent[1] != -1) std.posix.close(pipe_to_parent[1]); // close write end
     if (pipe_to_child[0] != -1) std.posix.close(pipe_to_child[0]); // close read end
 
-    if (use_veth) {
-        // Wait for child to signal it has unshared CLONE_NEWNET
+    if (need_sync) {
+        // Wait for child to signal it has unshared namespaces
         var ready_buf: [1]u8 = undefined;
         _ = std.posix.read(pipe_to_parent[0], &ready_buf) catch {};
         std.posix.close(pipe_to_parent[0]);
 
+        // Rootless: write uid/gid maps for the child
+        if (options.rootless) {
+            namespace.writeUidMapRootless(child_pid, allocator) catch |err| {
+                scoped_log.warn("Failed to write uid_map: {}", .{err});
+                namespace.writeUidMap(child_pid, outer_uid) catch {};
+            };
+            namespace.writeGidMapRootless(child_pid, allocator) catch |err| {
+                scoped_log.warn("Failed to write gid_map: {}", .{err});
+                namespace.writeGidMap(child_pid, outer_gid) catch {};
+            };
+        }
+    }
+
+    if (use_veth) {
         // Move guest veth into child's network namespace
         veth.moveToNamespace(guest_veth_name, child_pid) catch |err| {
             scoped_log.warn("Failed to move veth to child ns: {}", .{err});
@@ -207,8 +236,10 @@ pub fn runContainer(
         veth.setupMasquerade() catch |err| {
             scoped_log.warn("Failed to setup NAT: {}", .{err});
         };
+    }
 
-        // Signal child: "network ready"
+    if (need_sync) {
+        // Signal child: "parent setup complete"
         _ = std.posix.write(pipe_to_child[1], "g") catch {};
         std.posix.close(pipe_to_child[1]);
     }
