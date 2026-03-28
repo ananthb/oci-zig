@@ -550,7 +550,7 @@ fn cleanupMountsLegacy(allocator: std.mem.Allocator, rootfs_path: []const u8) vo
         defer allocator.free(path);
         const path_z = allocator.dupeZ(u8, path) catch continue;
         defer allocator.free(path_z[0 .. path.len + 1]);
-        _ = linux.syscall2(.umount2, @intFromPtr(path_z), MNT_DETACH);
+        _ = linux.syscall2(.umount2, @intFromPtr(path_z.ptr), MNT_DETACH);
     }
 }
 

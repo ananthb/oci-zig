@@ -43,7 +43,8 @@ const AUDIT_ARCH_X86_64 = 0xC000003E;
 const AUDIT_ARCH_AARCH64 = 0xC00000B7;
 
 pub const SeccompFilter = struct {
-    instructions: std.BoundedArray(SockFilter, 512) = .{},
+    instructions: [512]SockFilter = undefined,
+    len: usize = 0,
 
     pub fn init() SeccompFilter {
         var self = SeccompFilter{};
@@ -78,14 +79,17 @@ pub const SeccompFilter = struct {
         try syscall_mod.prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
 
         const prog = SockFilterProg{
-            .len = @intCast(self.instructions.len),
-            .filter = self.instructions.slice().ptr,
+            .len = @intCast(self.len),
+            .filter = &self.instructions,
         };
         try syscall_mod.prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, @intFromPtr(&prog), 0, 0);
     }
 
     fn addInstruction(self: *SeccompFilter, inst: SockFilter) void {
-        self.instructions.append(inst) catch {};
+        if (self.len < self.instructions.len) {
+            self.instructions[self.len] = inst;
+            self.len += 1;
+        }
     }
 
     fn getAuditArch() u32 {
