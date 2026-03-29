@@ -3,7 +3,7 @@ const containerfile = @import("containerfile.zig");
 const image = @import("image.zig");
 const layout_writer = @import("layout_writer.zig");
 
-// Fuzz targets for oci-zig parsers.
+// Fuzz targets for runz parsers.
 // Run with: zig build fuzz -ffuzz
 // Run once (as regular test): zig build fuzz
 

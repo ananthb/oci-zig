@@ -7,13 +7,13 @@ pub fn build(b: *std.Build) void {
     const ocispec_dep = b.dependency("ocispec", .{});
     const ocispec_module = ocispec_dep.module("ocispec");
 
-    const oci_module = b.addModule("oci", .{
+    const runz_module = b.addModule("runz", .{
         .root_source_file = b.path("src/lib.zig"),
         .imports = &.{
             .{ .name = "ocispec", .module = ocispec_module },
         },
     });
-    _ = oci_module;
+    _ = runz_module;
 
     // Tests
     const test_module = b.createModule(.{

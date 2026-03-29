@@ -236,3 +236,56 @@ test "default process" {
     try std.testing.expectEqualStrings("/", proc.cwd);
     try std.testing.expect(proc.noNewPrivileges);
 }
+
+test "parse minimal config.json" {
+    const json =
+        \\{"ociVersion":"1.0.2","root":{"path":"rootfs"},"process":{"args":["/bin/sh"],"cwd":"/home","env":["PATH=/usr/bin","HOME=/root"]}}
+    ;
+    const spec = try parseConfigManual(std.testing.allocator, json);
+    try std.testing.expectEqualStrings("1.0.2", spec.ociVersion);
+    try std.testing.expect(spec.root != null);
+    try std.testing.expectEqualStrings("rootfs", spec.root.?.path);
+    try std.testing.expect(spec.process != null);
+    try std.testing.expectEqualStrings("/home", spec.process.?.cwd);
+    try std.testing.expect(spec.process.?.args != null);
+    try std.testing.expectEqual(@as(usize, 1), spec.process.?.args.?.len);
+    try std.testing.expectEqualStrings("/bin/sh", spec.process.?.args.?[0]);
+    try std.testing.expect(spec.process.?.env != null);
+    try std.testing.expectEqual(@as(usize, 2), spec.process.?.env.?.len);
+
+    // Cleanup
+    std.testing.allocator.free(spec.ociVersion);
+    std.testing.allocator.free(spec.root.?.path);
+    std.testing.allocator.free(spec.process.?.cwd);
+    for (spec.process.?.args.?) |a| std.testing.allocator.free(a);
+    std.testing.allocator.free(spec.process.?.args.?);
+    for (spec.process.?.env.?) |e| std.testing.allocator.free(e);
+    std.testing.allocator.free(spec.process.?.env.?);
+}
+
+test "toCgroupResources memory" {
+    const res = LinuxResources{
+        .memory = .{ .limit = 512 * 1024 * 1024, .swap = 1024 * 1024 * 1024 },
+    };
+    const cg = toCgroupResources(&res);
+    try std.testing.expectEqual(@as(u64, 512 * 1024 * 1024), cg.memory_max);
+    try std.testing.expectEqual(@as(u64, 1024 * 1024 * 1024), cg.memory_swap_max);
+}
+
+test "toCgroupResources cpu" {
+    const res = LinuxResources{
+        .cpu = .{ .quota = 50000, .period = 100000, .shares = 1024 },
+    };
+    const cg = toCgroupResources(&res);
+    try std.testing.expectEqual(@as(u64, 50000), cg.cpu_quota);
+    try std.testing.expectEqual(@as(u64, 100000), cg.cpu_period);
+    try std.testing.expect(cg.cpu_weight > 0);
+}
+
+test "toCgroupResources pids" {
+    const res = LinuxResources{
+        .pids = .{ .limit = 100 },
+    };
+    const cg = toCgroupResources(&res);
+    try std.testing.expectEqual(@as(u32, 100), cg.pids_max);
+}

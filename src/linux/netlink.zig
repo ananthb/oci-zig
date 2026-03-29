@@ -244,3 +244,83 @@ pub fn getIfIndex(ifname: []const u8) !i32 {
     const index: *align(1) const i32 = @ptrCast(ifreq[16..20]);
     return index.*;
 }
+
+test "ipv4 address encoding" {
+    const testing = std.testing;
+    // 10.200.0.1 in network byte order (little-endian host)
+    const addr = ipv4(10, 200, 0, 1);
+    const bytes: [4]u8 = @bitCast(addr);
+    try testing.expectEqual(@as(u8, 10), bytes[0]);
+    try testing.expectEqual(@as(u8, 200), bytes[1]);
+    try testing.expectEqual(@as(u8, 0), bytes[2]);
+    try testing.expectEqual(@as(u8, 1), bytes[3]);
+}
+
+test "nlAlign" {
+    const testing = std.testing;
+    try testing.expectEqual(@as(usize, 0), nlAlign(0));
+    try testing.expectEqual(@as(usize, 4), nlAlign(1));
+    try testing.expectEqual(@as(usize, 4), nlAlign(4));
+    try testing.expectEqual(@as(usize, 8), nlAlign(5));
+    try testing.expectEqual(@as(usize, 16), nlAlign(16));
+    try testing.expectEqual(@as(usize, 20), nlAlign(17));
+}
+
+test "addAttr builds correct TLV" {
+    const testing = std.testing;
+    var buf: [64]u8 = std.mem.zeroes([64]u8);
+    var offset: usize = 0;
+
+    addAttr(&buf, &offset, 3, "eth0");
+    // NlAttr: len=4+4=8, type=3, data="eth0", aligned to 8
+    const attr: *const NlAttr = @ptrCast(@alignCast(&buf));
+    try testing.expectEqual(@as(u16, 8), attr.len);
+    try testing.expectEqual(@as(u16, 3), attr.type);
+    try testing.expectEqualStrings("eth0", buf[4..8]);
+    try testing.expectEqual(@as(usize, 8), offset);
+}
+
+test "addAttrStr null-terminates" {
+    const testing = std.testing;
+    var buf: [64]u8 = std.mem.zeroes([64]u8);
+    var offset: usize = 0;
+
+    addAttrStr(&buf, &offset, 1, "veth");
+    // len = 4 (NlAttr) + 4 (veth) + 1 (null) = 9, aligned to 12
+    const attr: *const NlAttr = @ptrCast(@alignCast(&buf));
+    try testing.expectEqual(@as(u16, 9), attr.len);
+    try testing.expectEqualStrings("veth", buf[4..8]);
+    try testing.expectEqual(@as(u8, 0), buf[8]); // null terminator
+    try testing.expectEqual(@as(usize, 12), offset);
+}
+
+test "nested attribute length patching" {
+    const testing = std.testing;
+    var buf: [128]u8 = std.mem.zeroes([128]u8);
+    var offset: usize = 0;
+
+    const start = startNested(&buf, &offset, 18); // IFLA_LINKINFO
+    addAttrStr(&buf, &offset, 1, "veth");
+    endNested(&buf, start, offset);
+
+    const outer: *const NlAttr = @ptrCast(@alignCast(buf[start..].ptr));
+    // outer len = 4 (own header) + 12 (inner attr) = 16
+    try testing.expectEqual(@as(u16, 16), outer.len);
+    try testing.expectEqual(@as(u16, 18), outer.type);
+}
+
+test "NlMsgHdr size" {
+    try std.testing.expectEqual(@as(usize, 16), @sizeOf(NlMsgHdr));
+}
+
+test "IfInfoMsg size" {
+    try std.testing.expectEqual(@as(usize, 16), @sizeOf(IfInfoMsg));
+}
+
+test "IfAddrMsg size" {
+    try std.testing.expectEqual(@as(usize, 8), @sizeOf(IfAddrMsg));
+}
+
+test "RtMsg size" {
+    try std.testing.expectEqual(@as(usize, 12), @sizeOf(RtMsg));
+}

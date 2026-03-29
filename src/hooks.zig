@@ -145,3 +145,43 @@ test "Hook defaults" {
     try std.testing.expect(hook.args == null);
     try std.testing.expect(hook.timeout == null);
 }
+
+test "parseHooks from JSON" {
+    const allocator = std.testing.allocator;
+    const json =
+        \\{"prestart":[{"path":"/usr/bin/fix-mounts","args":["/usr/bin/fix-mounts","arg1"],"timeout":5}],"poststop":[{"path":"/usr/bin/cleanup"}]}
+    ;
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, json, .{});
+    defer parsed.deinit();
+
+    const hooks = try parseHooks(allocator, parsed.value);
+
+    try std.testing.expectEqual(@as(usize, 1), hooks.prestart.len);
+    try std.testing.expectEqualStrings("/usr/bin/fix-mounts", hooks.prestart[0].path);
+    try std.testing.expect(hooks.prestart[0].args != null);
+    try std.testing.expectEqual(@as(usize, 2), hooks.prestart[0].args.?.len);
+    try std.testing.expectEqual(@as(u32, 5), hooks.prestart[0].timeout.?);
+
+    try std.testing.expectEqual(@as(usize, 1), hooks.poststop.len);
+    try std.testing.expectEqualStrings("/usr/bin/cleanup", hooks.poststop[0].path);
+
+    try std.testing.expectEqual(@as(usize, 0), hooks.createRuntime.len);
+    try std.testing.expectEqual(@as(usize, 0), hooks.poststart.len);
+
+    // Cleanup
+    for (hooks.prestart) |h| {
+        allocator.free(h.path);
+        if (h.args) |args| {
+            for (args) |a| allocator.free(a);
+            allocator.free(args);
+        }
+    }
+    allocator.free(hooks.prestart);
+    for (hooks.poststop) |h| allocator.free(h.path);
+    allocator.free(hooks.poststop);
+}
+
+test "HookPoint enum" {
+    try std.testing.expectEqualStrings("createRuntime", @tagName(HookPoint.createRuntime));
+    try std.testing.expectEqualStrings("poststop", @tagName(HookPoint.poststop));
+}

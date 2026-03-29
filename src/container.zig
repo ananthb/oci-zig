@@ -73,7 +73,7 @@ pub const Manager = struct {
 
         // Create cgroup if resources are specified
         if (resources) |res| {
-            info.cg = cgroup.Cgroup.create(self.allocator, "oci-zig", id) catch null;
+            info.cg = cgroup.Cgroup.create(self.allocator, "runz", id) catch null;
             if (info.cg) |*cg| {
                 cg.setResources(res);
             }
@@ -172,6 +172,38 @@ pub const Manager = struct {
 
 test "container state enum" {
     try std.testing.expectEqualStrings("creating", State.creating.string());
+    try std.testing.expectEqualStrings("created", State.created.string());
     try std.testing.expectEqualStrings("running", State.running.string());
     try std.testing.expectEqualStrings("stopped", State.stopped.string());
+}
+
+test "ContainerInfo toJson" {
+    const allocator = std.testing.allocator;
+    const info = ContainerInfo{
+        .id = "test-container-123",
+        .pid = 42,
+        .state = .running,
+        .bundle = "/tmp/test-bundle",
+        .created = 1700000000,
+        .allocator = allocator,
+    };
+    const json = try info.toJson(allocator);
+    defer allocator.free(json);
+
+    // Verify JSON contains expected fields
+    try std.testing.expect(std.mem.indexOf(u8, json, "test-container-123") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "running") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "42") != null);
+    try std.testing.expect(std.mem.indexOf(u8, json, "/tmp/test-bundle") != null);
+}
+
+test "ContainerInfo defaults" {
+    const info = ContainerInfo{
+        .id = "x",
+        .bundle = "/b",
+        .allocator = std.testing.allocator,
+    };
+    try std.testing.expect(info.pid == null);
+    try std.testing.expectEqual(State.creating, info.state);
+    try std.testing.expect(info.cg == null);
 }

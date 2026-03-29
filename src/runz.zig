@@ -30,9 +30,9 @@ pub const RunzOptions = struct {
     /// Pull image even if cached
     pull: bool = false,
     /// State directory for container metadata
-    state_dir: []const u8 = "/run/oci-zig",
+    state_dir: []const u8 = "/run/runz",
     /// Cache directory for pulled images
-    cache_dir: []const u8 = "/var/cache/oci-zig",
+    cache_dir: []const u8 = "/var/cache/runz",
 };
 
 /// Run a container image directly (like `podman run`).

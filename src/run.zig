@@ -698,7 +698,7 @@ fn execInRootfs(
     const rootfs_z = allocator.dupeZ(u8, rootfs_path) catch return;
 
     syscall.chroot(rootfs_z) catch {
-        std.debug.print("oci-zig: chroot failed\n", .{});
+        std.debug.print("runz: chroot failed\n", .{});
         return;
     };
     syscall.chdir("/") catch return;
@@ -738,7 +738,7 @@ fn execInRootfs(
 
     const cmd_z = allocator.dupeZ(u8, argv[0]) catch return;
     const err = std.posix.execveZ(cmd_z, @ptrCast(c_argv.items.ptr), @ptrCast(c_envp.items.ptr));
-    std.debug.print("oci-zig: execve failed: {}\n", .{err});
+    std.debug.print("runz: execve failed: {}\n", .{err});
 }
 
 /// Chroot-only exec (no seccomp, used as fallback)
@@ -750,7 +750,7 @@ fn runInChildChroot(
 ) void {
     const rootfs_z = allocator.dupeZ(u8, rootfs_path) catch return;
     syscall.chroot(rootfs_z) catch {
-        std.debug.print("oci-zig: chroot failed\n", .{});
+        std.debug.print("runz: chroot failed\n", .{});
         return;
     };
     syscall.chdir("/") catch return;
@@ -784,7 +784,7 @@ fn runInChildChroot(
 
     const cmd_z = allocator.dupeZ(u8, argv[0]) catch return;
     const err = std.posix.execveZ(cmd_z, @ptrCast(c_argv.items.ptr), @ptrCast(c_envp.items.ptr));
-    std.debug.print("oci-zig: execve failed: {}\n", .{err});
+    std.debug.print("runz: execve failed: {}\n", .{err});
 }
 
 /// Set up mounts for isolated (namespace) mode: bind rootfs, proc (read-only), sysfs, minimal /dev

@@ -1,7 +1,7 @@
 .{
-    .name = .oci,
+    .name = .runz,
     .version = "0.1.0",
-    .fingerprint = 0xc674b497beecfed4,
+    .fingerprint = 0xf9e6c3bb45f23f17,
     .dependencies = .{
         .ocispec = .{
             .url = "git+https://github.com/navidys/oci-spec-zig#9bb39600fb434e4ae34daed00fe7d9e48073b60a",

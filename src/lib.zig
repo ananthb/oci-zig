@@ -1,7 +1,8 @@
-//! OCI library - container image operations for Zig
+//! runz - OCI container runtime and library
 //!
-//! Provides OCI spec types, registry client, image building,
-//! Containerfile parsing, and layout reading/writing.
+//! Container runtime with image pulling, layer extraction,
+//! namespace isolation, cgroups, capabilities, networking,
+//! and OCI runtime spec support.
 
 /// OCI spec types (image, runtime, distribution)
 pub const spec = @import("ocispec");
