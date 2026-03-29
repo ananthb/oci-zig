@@ -211,3 +211,69 @@ test "cli: create and delete lifecycle" {
     defer allocator.free(state2_result.stderr);
     try std.testing.expect(state2_result.exit_code != 0);
 }
+
+// --- runz run (requires static busybox in the bundle) ---
+
+test "cli: runz run with echo" {
+    const allocator = std.testing.allocator;
+
+    const ts: u64 = @intCast(std.time.timestamp());
+    const state_dir = try std.fmt.allocPrint(allocator, "/tmp/runz-run-{x}", .{ts});
+    defer allocator.free(state_dir);
+    std.fs.makeDirAbsolute(state_dir) catch return;
+    defer std.fs.deleteTreeAbsolute(state_dir) catch {};
+
+    const config = try helpers.minimalConfig(allocator, &.{ "/bin/echo", "hello-from-runz-test" });
+    defer allocator.free(config);
+    const bundle = try helpers.createTestBundle(allocator, config);
+    defer {
+        helpers.cleanupBundle(bundle);
+        allocator.free(bundle);
+    }
+
+    // runz run requires root for namespaces — skip if not root
+    if (std.os.linux.getuid() != 0) return;
+
+    const result = try run(allocator, &.{
+        runz_bin, "--root", state_dir, "run", "run-test", "-b", bundle,
+    });
+    defer allocator.free(result.stdout);
+    defer allocator.free(result.stderr);
+
+    // Container should have printed our message
+    try std.testing.expect(
+        std.mem.indexOf(u8, result.stdout, "hello-from-runz-test") != null or
+            std.mem.indexOf(u8, result.stderr, "hello-from-runz-test") != null,
+    );
+}
+
+test "cli: runz spec has valid mounts" {
+    const allocator = std.testing.allocator;
+    const result = try run(allocator, &.{ runz_bin, "spec" });
+    defer allocator.free(result.stdout);
+    defer allocator.free(result.stderr);
+
+    try std.testing.expectEqual(@as(u8, 0), result.exit_code);
+
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, result.stdout, .{});
+    defer parsed.deinit();
+
+    // Verify mounts include /proc, /dev, /sys
+    const mounts = parsed.value.object.get("mounts") orelse return error.MissingField;
+    try std.testing.expect(mounts.array.items.len >= 3);
+
+    var has_proc = false;
+    var has_dev = false;
+    var has_sys = false;
+    for (mounts.array.items) |m| {
+        const dest = m.object.get("destination") orelse continue;
+        if (dest == .string) {
+            if (std.mem.eql(u8, dest.string, "/proc")) has_proc = true;
+            if (std.mem.eql(u8, dest.string, "/dev")) has_dev = true;
+            if (std.mem.eql(u8, dest.string, "/sys")) has_sys = true;
+        }
+    }
+    try std.testing.expect(has_proc);
+    try std.testing.expect(has_dev);
+    try std.testing.expect(has_sys);
+}

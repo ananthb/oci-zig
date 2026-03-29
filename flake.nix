@@ -160,6 +160,8 @@ sys.exit(0 if ok else 1)
             valgrind
             skopeo
             podman
+            jq
+            busybox
           ];
         };
       }

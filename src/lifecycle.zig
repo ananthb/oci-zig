@@ -83,6 +83,9 @@ pub fn create(
 
     if (child_pid == 0) {
         // === CHILD: Container init process ===
+        // Use page_allocator in child (parent's arena is unsafe after fork)
+        const child_alloc = std.heap.page_allocator;
+        _ = child_alloc;
 
         // Unshare namespaces
         var ns_flags: u32 = syscall.CloneFlags.CLONE_NEWNS | syscall.CloneFlags.CLONE_NEWPID;

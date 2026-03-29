@@ -8,9 +8,11 @@ const cgroup = runz.linux_util.cgroup;
 const version = "0.1.0";
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+    // Use arena allocator for the CLI — no need to track individual frees.
+    // The process exits after the command completes.
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
 
     var args = std.process.args();
     _ = args.next(); // skip argv[0]
