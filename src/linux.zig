@@ -18,3 +18,5 @@ pub const ioprio = @import("linux/ioprio.zig");
 pub const personality = @import("linux/personality.zig");
 pub const checkpoint = @import("linux/checkpoint.zig");
 pub const seccomp_notify = @import("linux/seccomp_notify.zig");
+pub const process = @import("linux/process.zig");
+pub const system = @import("linux/system.zig");

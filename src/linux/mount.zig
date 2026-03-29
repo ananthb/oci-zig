@@ -266,6 +266,55 @@ pub fn ensureDir(path: []const u8) !void {
     };
 }
 
+pub const PivotError = error{
+    PivotRootFailed,
+    ChdirFailed,
+    ChrootFailed,
+    PathTooLong,
+};
+
+/// Perform pivot_root with fallback to switch_root approach.
+/// new_root: path to new root filesystem
+/// put_old: path where old root will be mounted (relative to new_root)
+pub fn pivotRoot(new_root: []const u8, put_old: []const u8) PivotError!void {
+    var new_root_buf: [std.fs.max_path_bytes]u8 = undefined;
+    var put_old_buf: [std.fs.max_path_bytes]u8 = undefined;
+
+    if (new_root.len >= new_root_buf.len or put_old.len >= put_old_buf.len) {
+        return error.PathTooLong;
+    }
+
+    @memcpy(new_root_buf[0..new_root.len], new_root);
+    new_root_buf[new_root.len] = 0;
+    const new_root_z: [*:0]const u8 = @ptrCast(new_root_buf[0..new_root.len :0]);
+
+    const put_old_abs = if (std.fs.path.isAbsolute(put_old))
+        put_old
+    else blk: {
+        @memcpy(put_old_buf[0..new_root.len], new_root);
+        put_old_buf[new_root.len] = '/';
+        @memcpy(put_old_buf[new_root.len + 1 ..][0..put_old.len], put_old);
+        put_old_buf[new_root.len + 1 + put_old.len] = 0;
+        break :blk put_old_buf[0 .. new_root.len + 1 + put_old.len];
+    };
+
+    const put_old_z: [*:0]const u8 = @ptrCast(put_old_abs.ptr);
+
+    // Try pivot_root first
+    syscall.pivotRoot(new_root_z, put_old_z) catch |err| {
+        log.warn("pivot_root failed: {}, trying switch_root fallback", .{err});
+
+        // Fallback to switch_root: chdir + mount move + chroot
+        syscall.chdir(new_root_z) catch return error.ChdirFailed;
+        syscall.mount(".", "/", null, .{ .move = true }, null) catch return error.PivotRootFailed;
+        syscall.chroot(".") catch return error.ChrootFailed;
+        syscall.chdir("/") catch return error.ChdirFailed;
+        return;
+    };
+
+    syscall.chdir("/") catch return error.ChdirFailed;
+}
+
 test "mount info parsing" {
     // This test just verifies the structure compiles
     const info = MountInfo{

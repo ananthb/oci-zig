@@ -112,4 +112,25 @@ pub fn build(b: *std.Build) void {
     });
     valgrind_run.addArtifactArg(tests);
     valgrind_step.dependOn(&valgrind_run.step);
+
+    // Docs step
+    const docs_step = b.step("docs", "Generate API documentation");
+
+    const docs_lib = b.addLibrary(.{
+        .name = "runz-docs",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/lib.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+
+    const docs_install = b.addInstallDirectory(.{
+        .source_dir = docs_lib.getEmittedDocs(),
+        .install_dir = .{ .custom = "docs/public/api" },
+        .install_subdir = "",
+    });
+
+    docs_step.dependOn(&docs_install.step);
+    b.getInstallStep().dependOn(&docs_install.step);
 }

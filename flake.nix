@@ -194,6 +194,9 @@ sys.exit(0 if ok else 1)
             podman
             jq
             busybox
+            nodejs_22
+            python3
+            python3Packages.mkdocs-material
           ];
         };
       }
