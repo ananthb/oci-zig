@@ -9,3 +9,4 @@ pub const cgroup = @import("linux/cgroup.zig");
 pub const capabilities = @import("linux/capabilities.zig");
 pub const pty = @import("linux/pty.zig");
 pub const paths = @import("linux/paths.zig");
+pub const security = @import("linux/security.zig");

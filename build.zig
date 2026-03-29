@@ -13,7 +13,21 @@ pub fn build(b: *std.Build) void {
             .{ .name = "ocispec", .module = ocispec_module },
         },
     });
-    _ = runz_module;
+
+    // CLI binary
+    const exe = b.addExecutable(.{
+        .name = "runz",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "runz", .module = runz_module },
+            },
+        }),
+    });
+    b.installArtifact(exe);
 
     // Tests
     const test_module = b.createModule(.{

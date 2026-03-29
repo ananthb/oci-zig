@@ -153,7 +153,7 @@ fn parseConfigManual(allocator: std.mem.Allocator, data: []const u8) !Spec {
             if (p == .string) {
                 spec.root = .{
                     .path = try allocator.dupe(u8, p.string),
-                    .readonly = if (r.object.get("readonly")) |ro| ro == .true else false,
+                    .readonly = if (r.object.get("readonly")) |ro| (ro == .bool and ro.bool) else false,
                 };
             }
         }
@@ -161,14 +161,14 @@ fn parseConfigManual(allocator: std.mem.Allocator, data: []const u8) !Spec {
 
     if (root.object.get("process")) |p| {
         spec.process = .{
-            .terminal = if (p.object.get("terminal")) |t| t == .true else false,
+            .terminal = if (p.object.get("terminal")) |t| (t == .bool and t.bool) else false,
             .cwd = if (p.object.get("cwd")) |c| blk: {
                 if (c == .string) break :blk try allocator.dupe(u8, c.string);
                 break :blk "/";
             } else "/",
             .args = if (p.object.get("args")) |a| try parseStringArray(allocator, a) else null,
             .env = if (p.object.get("env")) |e| try parseStringArray(allocator, e) else null,
-            .noNewPrivileges = if (p.object.get("noNewPrivileges")) |n| n == .true else true,
+            .noNewPrivileges = if (p.object.get("noNewPrivileges")) |n| (n == .bool and n.bool) else true,
         };
     }
 
