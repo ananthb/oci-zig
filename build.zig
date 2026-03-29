@@ -127,8 +127,8 @@ pub fn build(b: *std.Build) void {
 
     const docs_install = b.addInstallDirectory(.{
         .source_dir = docs_lib.getEmittedDocs(),
-        .install_dir = .{ .custom = "docs/public/api" },
-        .install_subdir = "",
+        .install_dir = .prefix,
+        .install_subdir = "docs",
     });
 
     docs_step.dependOn(&docs_install.step);

@@ -14,9 +14,6 @@ concurrency:
   group: "pages"
   cancel-in-progress: true
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -30,14 +27,8 @@ jobs:
       - name: Magic Nix Cache
         uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - name: Generate API Docs
-        run: nix develop .#default --command zig build docs -p .
-
-      - name: Build Docs Site
-        working-directory: docs
-        run: |
-          nix develop ..#default --command npm ci
-          nix develop ..#default --command npm run build
+      - name: Generate Documentation
+        run: nix develop .#default --command zig build docs -p zig-out
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -45,7 +36,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/dist
+          path: zig-out/docs
 
   deploy:
     environment:
