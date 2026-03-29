@@ -83,11 +83,28 @@ pub fn runFromBundle(
     // Determine network mode
     const network_mode: run.NetworkMode = if (want_netns) .veth else .host;
 
+    // Build capability set from spec
+    var cap_set: ?capabilities.CapSet = null;
+    if (process.capabilities) |proc_caps| {
+        var set = capabilities.CapSet{};
+        if (proc_caps.bounding) |names| {
+            set = capabilities.CapSet.fromNames(names);
+        } else if (proc_caps.effective) |names| {
+            set = capabilities.CapSet.fromNames(names);
+        } else {
+            set = capabilities.CapSet.defaultSet();
+        }
+        cap_set = set;
+    }
+
     // Build container options
     var container_opts = run.ContainerOptions{
         .env = process.env,
         .network = network_mode,
         .rootless = want_userns,
+        .mounts = spec.mounts,
+        .capabilities = cap_set,
+        .cwd = if (!std.mem.eql(u8, process.cwd, "/")) process.cwd else null,
     };
 
     // Set up cgroup resources if specified

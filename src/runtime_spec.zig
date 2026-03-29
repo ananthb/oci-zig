@@ -167,6 +167,65 @@ fn parseConfigManual(allocator: std.mem.Allocator, data: []const u8) !Spec {
         };
     }
 
+    // Parse mounts
+    if (root.object.get("mounts")) |mounts_val| {
+        if (mounts_val == .array) {
+            var mounts_list: std.ArrayListUnmanaged(Mount) = .{};
+            for (mounts_val.array.items) |m| {
+                if (m != .object) continue;
+                const dest = m.object.get("destination") orelse continue;
+                if (dest != .string) continue;
+
+                var mount = Mount{
+                    .destination = try allocator.dupe(u8, dest.string),
+                };
+
+                if (m.object.get("type")) |t| {
+                    if (t == .string) mount.type = try allocator.dupe(u8, t.string);
+                }
+                if (m.object.get("source")) |s| {
+                    if (s == .string) mount.source = try allocator.dupe(u8, s.string);
+                }
+                if (m.object.get("options")) |opts| {
+                    mount.options = try parseStringArray(allocator, opts);
+                }
+
+                try mounts_list.append(allocator, mount);
+            }
+            if (mounts_list.items.len > 0) {
+                spec.mounts = try mounts_list.toOwnedSlice(allocator);
+            }
+        }
+    }
+
+    // Parse linux.namespaces
+    if (root.object.get("linux")) |lnx| {
+        var linux_spec = Linux{};
+        if (lnx.object.get("namespaces")) |ns_val| {
+            if (ns_val == .array) {
+                var ns_list: std.ArrayListUnmanaged(Namespace) = .{};
+                for (ns_val.array.items) |ns| {
+                    if (ns != .object) continue;
+                    const ns_type = ns.object.get("type") orelse continue;
+                    if (ns_type != .string) continue;
+                    var namespace = Namespace{ .type = try allocator.dupe(u8, ns_type.string) };
+                    if (ns.object.get("path")) |p| {
+                        if (p == .string) namespace.path = try allocator.dupe(u8, p.string);
+                    }
+                    try ns_list.append(allocator, namespace);
+                }
+                if (ns_list.items.len > 0) linux_spec.namespaces = try ns_list.toOwnedSlice(allocator);
+            }
+        }
+        if (lnx.object.get("maskedPaths")) |mp| {
+            linux_spec.maskedPaths = try parseStringArray(allocator, mp);
+        }
+        if (lnx.object.get("readonlyPaths")) |rp| {
+            linux_spec.readonlyPaths = try parseStringArray(allocator, rp);
+        }
+        spec.linux = linux_spec;
+    }
+
     return spec;
 }
 

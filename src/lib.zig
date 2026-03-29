@@ -46,6 +46,9 @@ pub const runz = @import("runz.zig");
 /// Run a container from an OCI runtime spec bundle
 pub const spec_run = @import("spec_run.zig");
 
+/// Process OCI spec mounts
+pub const spec_mount = @import("spec_mount.zig");
+
 /// Execute processes inside running containers (nsenter)
 pub const exec = @import("exec.zig");
 

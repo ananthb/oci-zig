@@ -48,6 +48,12 @@ pub const ContainerOptions = struct {
     rootless: bool = false,
     /// Resource limits (null = no cgroup)
     resources: ?*const @import("linux/cgroup.zig").Resources = null,
+    /// OCI spec mounts (null = use default mounts)
+    mounts: ?[]const @import("runtime_spec.zig").Mount = null,
+    /// Capabilities to apply (null = keep all)
+    capabilities: ?@import("linux/capabilities.zig").CapSet = null,
+    /// Working directory (null = /)
+    cwd: ?[]const u8 = null,
 };
 
 /// Execute a short-lived command inside a rootfs with container isolation.
@@ -186,7 +192,7 @@ pub fn runContainer(
 
         const grandchild_pid = inner_result.?;
         if (grandchild_pid == 0) {
-            pivotAndExec(allocator, rootfs_path, argv, options.env);
+            pivotAndExec(allocator, rootfs_path, argv, &options);
             std.process.exit(127);
         }
 
@@ -346,8 +352,11 @@ fn pivotAndExec(
     allocator: std.mem.Allocator,
     rootfs_path: []const u8,
     argv: []const []const u8,
-    env: ?[]const []const u8,
+    options: *const ContainerOptions,
 ) void {
+    const spec_mount = @import("spec_mount.zig");
+    const caps = @import("linux/capabilities.zig");
+
     // Ensure rootfs is a mount point (required by pivot_root)
     {
         var buf: [std.fs.max_path_bytes]u8 = undefined;
@@ -357,6 +366,11 @@ fn pivotAndExec(
             const z: [*:0]const u8 = @ptrCast(buf[0..rootfs_path.len :0]);
             syscall.mount(z, z, null, .{ .bind = true }, null) catch {};
         }
+    }
+
+    // Apply OCI spec mounts before pivot (they target paths inside rootfs)
+    if (options.mounts) |mounts| {
+        spec_mount.applySpecMounts(allocator, rootfs_path, mounts);
     }
 
     // pivot_root
@@ -372,20 +386,37 @@ fn pivotAndExec(
         scoped_log.err("pivot_root failed: {}, falling back to chroot", .{err});
         syscall.chroot(rootfs_z) catch return;
         syscall.chdir("/") catch return;
-        doExec(allocator, argv, env);
+        applyPreExec(options, caps);
+        doExec(allocator, argv, options.env);
         return;
     };
 
-    syscall.chdir("/") catch return;
-
-    // Unmount old root (lazy)
-    {
-        const old_z = allocator.dupeZ(u8, "/mnt/oldroot") catch return;
-        defer allocator.free(old_z);
-        mount_util.umountDetach("/mnt/oldroot") catch {};
+    // Change to working directory
+    const cwd_z = if (options.cwd) |cwd| (allocator.dupeZ(u8, cwd) catch null) else null;
+    if (cwd_z) |z| {
+        syscall.chdir(z) catch {};
+        allocator.free(z);
+    } else {
+        syscall.chdir("/") catch return;
     }
 
-    doExec(allocator, argv, env);
+    // Unmount old root (lazy)
+    mount_util.umountDetach("/mnt/oldroot") catch {};
+
+    // Apply capabilities and security settings before exec
+    applyPreExec(options, caps);
+
+    doExec(allocator, argv, options.env);
+}
+
+/// Apply capabilities and no_new_privs before exec
+fn applyPreExec(options: *const ContainerOptions, caps_mod: anytype) void {
+    // Apply capabilities if specified
+    if (options.capabilities) |cap_set| {
+        caps_mod.applyCaps(cap_set) catch {};
+    }
+    // Set no_new_privs (default for OCI containers)
+    caps_mod.setNoNewPrivs();
 }
 
 /// Build argv/envp and exec

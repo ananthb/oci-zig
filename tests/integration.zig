@@ -23,6 +23,10 @@ test "parse config.json and extract process args" {
     try std.testing.expectEqualStrings("hello", spec.process.?.args.?[1]);
 
     // Cleanup allocated strings
+    freeSpec(allocator, &spec);
+}
+
+fn freeSpec(allocator: std.mem.Allocator, spec: *const runz.runtime_spec.Spec) void {
     allocator.free(spec.ociVersion);
     if (spec.root) |r| allocator.free(r.path);
     if (spec.process) |p| {
@@ -35,6 +39,32 @@ test "parse config.json and extract process args" {
             for (env) |e| allocator.free(e);
             allocator.free(env);
         }
+    }
+    if (spec.linux) |lnx| {
+        if (lnx.namespaces) |ns| {
+            for (ns) |n| allocator.free(n.type);
+            allocator.free(ns);
+        }
+        if (lnx.maskedPaths) |mp| {
+            for (mp) |p| allocator.free(p);
+            allocator.free(mp);
+        }
+        if (lnx.readonlyPaths) |rp| {
+            for (rp) |p| allocator.free(p);
+            allocator.free(rp);
+        }
+    }
+    if (spec.mounts) |mounts| {
+        for (mounts) |m| {
+            allocator.free(m.destination);
+            if (m.type) |t| allocator.free(t);
+            if (m.source) |s| allocator.free(s);
+            if (m.options) |opts| {
+                for (opts) |o| allocator.free(o);
+                allocator.free(opts);
+            }
+        }
+        allocator.free(mounts);
     }
 }
 
@@ -44,24 +74,10 @@ test "parse config.json with resource limits" {
     defer allocator.free(config);
 
     const spec = try runz.runtime_spec.parseConfig(allocator, config);
+    defer freeSpec(allocator, &spec);
 
     // Verify spec parses (detailed resource extraction is tested in runtime_spec unit tests)
     try std.testing.expect(spec.process != null);
-
-    // Cleanup
-    allocator.free(spec.ociVersion);
-    if (spec.root) |r| allocator.free(r.path);
-    if (spec.process) |p| {
-        allocator.free(p.cwd);
-        if (p.args) |args| {
-            for (args) |a| allocator.free(a);
-            allocator.free(args);
-        }
-        if (p.env) |env| {
-            for (env) |e| allocator.free(e);
-            allocator.free(env);
-        }
-    }
 }
 
 // --- Container manager ---
