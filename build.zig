@@ -115,20 +115,17 @@ pub fn build(b: *std.Build) void {
     valgrind_run.addArtifactArg(tests);
     valgrind_step.dependOn(&valgrind_run.step);
 
-    // Docs step
     const docs_step = b.step("docs", "Generate API documentation");
 
-    const docs_lib = b.addLibrary(.{
-        .name = "runz-docs",
+    const docs_test = b.addTest(.{
         .root_module = runz_module,
     });
 
     const docs_install = b.addInstallDirectory(.{
-        .source_dir = docs_lib.getEmittedDocs(),
+        .source_dir = docs_test.getEmittedDocs(),
         .install_dir = .prefix,
         .install_subdir = "docs",
     });
 
     docs_step.dependOn(&docs_install.step);
-    b.getInstallStep().dependOn(&docs_install.step);
 }

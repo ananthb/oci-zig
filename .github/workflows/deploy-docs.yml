@@ -29,8 +29,10 @@ jobs:
 
       - name: Generate Documentation
         run: |
-          rm -rf docs/
-          nix develop .#default --command zig build docs -p zig-out
+          nix develop .#default --command mkdocs build
+          nix develop .#default --command zig build docs -p site
+          # The docs step in build.zig installs to <prefix>/docs, so we move it to <prefix>/api
+          mv site/docs site/api
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -38,7 +40,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: zig-out/docs
+          path: site
 
   deploy:
     environment:
