@@ -72,6 +72,20 @@ pub fn build(b: *std.Build) void {
     cli_step.dependOn(b.getInstallStep()); // ensure binary is built first
     cli_step.dependOn(&b.addRunArtifact(cli_tests).step);
 
+    // Layer 3: OCI compliance tests (requires root + built binary)
+    const compliance_module = b.createModule(.{
+        .root_source_file = b.path("tests/compliance.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    const compliance_tests = b.addTest(.{
+        .root_module = compliance_module,
+    });
+    const compliance_step = b.step("test-compliance", "Run OCI compliance tests (requires root + built binary)");
+    compliance_step.dependOn(b.getInstallStep());
+    compliance_step.dependOn(&b.addRunArtifact(compliance_tests).step);
+
     // Fuzz targets
     const fuzz_module = b.createModule(.{
         .root_source_file = b.path("src/fuzz.zig"),
