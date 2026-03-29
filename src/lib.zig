@@ -49,5 +49,8 @@ pub const exec = @import("exec.zig");
 /// Logging (set log level, colors)
 pub const log = @import("log.zig");
 
+/// OCI annotations support
+pub const annotations = @import("annotations.zig");
+
 /// Linux-specific utilities (namespaces, mounts, seccomp, cgroups, capabilities)
 pub const linux_util = @import("linux.zig");
