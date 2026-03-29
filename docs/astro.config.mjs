@@ -8,9 +8,9 @@ export default defineConfig({
 			description: 'OCI container runtime and library in Zig',
 			customCss: ['./src/styles/custom.css'],
             disable404Route: true,
-			social: {
-				github: 'https://github.com/ananthb/runz',
-			},
+			social: [
+                { icon: 'github', link: 'https://github.com/ananthb/runz' }
+            ],
 			sidebar: [
 				{
 					label: 'Guides',
