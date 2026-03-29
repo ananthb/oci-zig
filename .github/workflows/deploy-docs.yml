@@ -33,7 +33,7 @@ jobs:
       - name: Build Docs Site
         working-directory: docs
         run: |
-          nix develop ..#default --command npm install
+          nix develop ..#default --command npm ci
           nix develop ..#default --command npm run build
 
       - name: Setup Pages
